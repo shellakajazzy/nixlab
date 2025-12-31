@@ -2,6 +2,7 @@
 
 {
   imports = [
+    ../modules/nixos/sops.nix
     ../modules/nixos/hardening.nix
   ];
 
