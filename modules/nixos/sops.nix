@@ -4,9 +4,14 @@
   imports = [ inputs.sops-nix.nixosModules.sops ];
   environment.systemPackages = with pkgs; [ age ssh-to-age sops ];
 
-  # TODO: use workaround from here https://github.com/Mic92/sops-nix/pull/534#issuecomment-2079752308
+  boot.initrd.postDeviceCommands = ''
+    cp -r ${../../secrets/sops_key.txt} /run/sops_key.txt
+    chmod -R 700 /run/sops_key.txt
+  '';
 
   sops = {
+    age.keyFile = "/run/sops_key.txt";
+
     defaultSopsFile = ../../secrets/secrets.yaml;
     defaultSopsFormat = "yaml";
   };
