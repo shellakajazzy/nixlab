@@ -2,26 +2,22 @@
 My homelab/network configuration, primarily using NixOS flakes for deployment.
 
 == Network Anatomy
+* Using tailscale as a meshnet VPN to connect all of my machines together, as well as funneling some services to the public internet
+
 === Services
 * WIP `squeeze`: Runs basically all of my self hosted services
 ** Runs as a VM on my proxmox instance on my Dell Poweredge T420
 ** Should start automatically when proxmox boots up
 ** Hosts my file share, which is served either through nextcloud or sshfs
-** Additionally hosts
-* TODO ``: My development server
-** Serves as a machine I can SSH into to work on projects in case im on a system that doesn't allow installing stuff
-* TODO ``: Entirely focused on my 3d printer
-** If started, runs Klipper for my Voxelab Aquila
+** Runs most of my self-hosted services, asdf
 
 === Automation
-* WIP ``: Manages networking
-** Oracle Free Tier compute instance
-** Hosts headscale for my VPN, as well as nginx reverse proxy and duckdns
-* TODO ``: Primary automation machine
-** Runs as a VM on my proxmox instance on my Dell Poweredge T420
-** Hosts n8n as well as other AI agents
-* TODO ``: Automation machine when ``
-** Serves n8n when `` is down, then
+* TODO ``: Dedicated n8n automation server
+** Running on an always free Oracle VPS
+*** Could potentially offload AI agents to a VM on my T420, but this should be enough for running at least 1 at a time (I think)
+* TODO ``: Dedicated wake-on-Lan server
+** Running on a Raspberry Pi 3
+** Used to turn on my T420
 
 === Clients
 * My phones and laptops
@@ -33,3 +29,4 @@ My homelab/network configuration, primarily using NixOS flakes for deployment.
 * A Raspberry Pi 5 or similar to run automation when `` is down
 ** Could just be something that can run really small AI agents and uses very little power
 ** Currently using a Raspberry Pi 3, which leaves a lot to be desired
+* A new gaming setup so that I can use my gaming laptop for ai
