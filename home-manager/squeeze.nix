@@ -5,6 +5,7 @@
 
   home-manager = {
     extraSpecialArgs = { inherit inputs; };
+
     users.squeeze = { config, pkgs, inputs, ... }: {
       home = {
         username = "squeeze";
