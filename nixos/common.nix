@@ -4,6 +4,7 @@
   imports = [
     ../modules/nixos/sops.nix
     ../modules/nixos/firewall.nix
+    ../modules/nixos/tailscale.nix
   ];
 
   # setup nix and nix packages
