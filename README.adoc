@@ -4,6 +4,10 @@ My homelab/network configuration, primarily using NixOS flakes for deployment.
 == Network Anatomy
 * Using tailscale as a meshnet VPN to connect all of my machines together, as well as funneling some services to the public internet
 
+* `summon`: Development and deployment server
+** Has read/write access to this GitHub repo
+** Uses nixos-anywhere to deploy my NixOS machines
+
 === Services
 * `squeeze`: Runs basically all of my self hosted services
 ** Runs as a VM on my proxmox instance on my Dell Poweredge T420
@@ -16,13 +20,15 @@ My homelab/network configuration, primarily using NixOS flakes for deployment.
 ** (Planned to be) Running on an always free Oracle VPS
 *** Could potentially offload AI agents to a VM on my T420, but this should be enough for running at least 1 at a time (I think)
 *** Currently waiting for availability, or perhaps an SBC capable of running AIs and n8n smoothly like a Raspberry Pi 5
-* `summon`: Dedicated wake-on-Lan server
+* `slumber`: Dedicated wake-on-Lan server
 ** Running on a Raspberry Pi 3
 ** Used to power on my T420
+** Running my n8n instance while waiting for availability for `shake`
 
 === Clients
 * My phones and laptops
 * Should just be running tailscale, syncthing, and either sshfs or nextcloud to access my file share
+* Might allow laptop to deploy my machines using nixos-anywhere
 
 == Wishlist
 * Either NVIDIA teslas and a new PSU for my T420 or a seperate machine dedicated for AI agents
