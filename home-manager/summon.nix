@@ -6,10 +6,10 @@
   home-manager = {
     extraSpecialArgs = { inherit inputs; };
 
-    users.squeeze = { config, pkgs, inputs, ... }: {
+    users.summon = { config, pkgs, inputs, ... }: {
       home = {
-        username = "squeeze";
-	homeDirectory = "/home/squeeze";
+        username = "summon";
+	homeDirectory = "/home/summon";
 	packages = [ ];
       };
 

@@ -7,12 +7,12 @@
   boot.loader.grub.device = "/dev/sda";
   boot.loader.grub.useOSProber = true;
 
-  networking.hostName = "squeeze";
+  networking.hostName = "summon";
   networking.networkmanager.enable = true;
 
-  users.users.squeeze = {
+  users.users.summon = {
     isNormalUser = true;
-    description = "squeeze";
+    description = "summon";
     extraGroups = [ "networkmanager" "wheel" ];
     packages = with pkgs; [ git neovim tmux ];
   };

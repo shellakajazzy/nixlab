@@ -17,13 +17,13 @@
 
   outputs = { self, nixpkgs, ... }@inputs: {
     nixosConfigurations = {
-      squeeze = nixpkgs.lib.nixosSystem {
+      summon = nixpkgs.lib.nixosSystem {
       	system = "x86_64-linux";
 	specialArgs = { inherit inputs; };
 
 	modules = [
-	  ./nixos/squeeze/configuration.nix
-	  ./home-manager/squeeze.nix
+	  ./nixos/summon/configuration.nix
+	  ./home-manager/summon.nix
 	  ./modules/nixos/openssh.nix
 	];
       };

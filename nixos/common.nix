@@ -32,6 +32,4 @@
     layout = "us";
     variant = "";
   };
-
-
 }
