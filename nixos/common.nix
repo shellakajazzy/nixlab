@@ -3,7 +3,7 @@
 {
   imports = [
     ../modules/nixos/sops.nix
-    ../modules/nixos/hardening.nix
+    ../modules/nixos/firewall.nix
   ];
 
   # setup nix and nix packages
