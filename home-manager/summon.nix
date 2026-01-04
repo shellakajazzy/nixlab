@@ -13,7 +13,10 @@
 	packages = [ ];
       };
 
-      imports = [ ./common.nix ];
+      imports = [
+        ./common.nix
+	../slumber/deploy.nix
+      ];
     };
   };
 }

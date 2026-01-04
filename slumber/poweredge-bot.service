@@ -1,0 +1,14 @@
+[Unit]
+Description=Run script that manages powering on/off my Dell PowerEdge T420
+After=network.target
+After=tailscaled.service
+
+[Service]
+ExecStart=/home/slumber/.local/bin/uv run /home/slumber/poweredge-bot.py
+Restart=on-failure
+StartLimitBurst=1
+StartLimitInterval=30
+RestartSec=30
+
+[Install]
+WantedBy=default.target
