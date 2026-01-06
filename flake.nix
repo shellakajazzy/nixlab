@@ -40,6 +40,7 @@
 	  ./modules/nixos/openssh.nix
 	  ./modules/nixos/nextcloud.nix
 	  ./modules/nixos/syncthing.nix
+	  ./modules/nixos/forgejo.nix
 	];
       };
     };
