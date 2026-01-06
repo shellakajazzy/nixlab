@@ -39,6 +39,7 @@
 	  ./nixos/squeeze/configuration.nix
 	  ./modules/nixos/openssh.nix
 	  ./modules/nixos/nextcloud.nix
+	  ./modules/nixos/syncthing.nix
 	];
       };
     };
