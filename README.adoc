@@ -24,6 +24,8 @@ VLAN segmentation is achieved using a Proxmox VLAN SDN Zone.
 ** `automation` n8n + AI agents
 *** GPU is passed through for use for AIs
 * DMZ VLAN - Public (internet) facing services
-** `shellakajazzy` Tailscale tunnel server
+** `shellakajazzy` Tailscale funnel server running on an Orcale Cloud free tier AMD64 instance
 ** `forgejo` Forgejo
+*** Should be under the subpath `/forgejo` under my site
 ** `web` Blog / personal website
+*** Should be the root subpath for my site

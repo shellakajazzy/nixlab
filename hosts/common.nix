@@ -1,7 +1,10 @@
-{ config, pkgs, ... }:
+{ inputs, config, pkgs, lib, hostname, diskname, opensshPubKey, ... }:
 
 {
-  imports = [ inputs.sops-nix.nixosModules.sops ];
+  imports = [
+    inputs.sops-nix.nixosModules.sops
+    inputs.disko.nixosModules.disko
+  ];
 
   # setup nix and nix packages
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
@@ -51,8 +54,27 @@
     defaultSopsFormat = "yaml";
   };
 
+  # setup users
+  users = {
+    mutableUsers = false;
+    users = {
+      root.hashedPassword = "!";
+      ${hostname} = {
+	isNormalUser = true;
+	home = "/home/${hostname}";
+	descriptiion = "${hostname}";
+	extraGroups = [ "wheel" "networkmanager" ];
+	openssh.authorizedKeys.keys = [ "${opensshPubKey}" ];
+      };
+    };
+  };
+
+  # setup hostname and networking
+  networking.networkmanager.enable = true;
+  networking.hostName = "${hostname}";
+
   # setup tailscale as a client
-  sops.secrets."tailscale/auth_key".owner = "tailscale-autoconnect";
+  sops.secrets."tailscale_auth_key".owner = "tailscale-autoconnect";
 
   environment.systemPackages = with pkgs; [ tailscale jq ];
   services.tailscale.enable = true;
@@ -79,7 +101,7 @@
 	status="$(${pkgs.tailscale}/bin/tailscale status -json | ${pkgs.jq}/bin/jq -r .BackendState)"
 	if [ $status = "Running" ]; then exit 0; fi
 
-	${pkgs.tailscale}/bin/tailscale up -authkey $(cat ${config.sops.secrets."tailscale/auth_key".path})
+	${pkgs.tailscale}/bin/tailscale up -authkey $(cat ${config.sops.secrets."tailscale_auth_key".path})
       '';
     };
   };
@@ -89,12 +111,62 @@
     enable = true;
     ports = [ 22 ];
     settings = {
-      # TODO: change when I get keys setup
-      PermitRootLogin = "yes";
-      PasswordAuthentication = true;
-      KbdInteractiveAuthentication = true;
+      PermitRootLogin = "no";
+      PasswordAuthentication = false;
+      KbdInteractiveAuthentication = false;
     };
   };
 
   networking.firewall.allowedTCPPorts = [ 22 ];
+
+  # setup bootloader
+  boot.loader.grub = {
+    enable = true;
+    devices = lib.mkForce [ "${diskname}" ];
+    useOSProbe = true;
+  };
+
+  # should be compatible with all NixOS machines I am deploying
+  disko.devices = {
+    disk.main = {
+      device = "${diskname}";
+      type = "disk";
+      content = {
+        type = "gpt";
+	partitions = {
+	  boot = {
+	    size = "1M";
+	    type = "EF02";
+	  };
+	  esp = {
+	    size = "500M";
+	    type = "EF00";
+	    content = {
+	      type = "filesystem";
+	      format = "vfat";
+	      mountpoint = "/boot";
+	      mountOptions = [ "umask=077" ];
+	    };
+	  };
+	  root = {
+	    end = "-2G";
+	    size = "100%";
+	    content = {
+	      type = "filesystem";
+	      format = "ext4";
+	      mountpoint = "/";
+	    };
+	  };
+	  swap = {
+	    size = "100%";
+	    content = {
+	      type = "swap";
+	      discardPolicy = "both";
+	      resumeDevice = true;
+	    };
+	  };
+	};
+      };
+    };
+  };
 }
