@@ -5,9 +5,11 @@
     inputs.sops-nix.nixosModules.sops
     inputs.disko.nixosModules.disko
   ];
+  environment.systemPackages = with pkgs; [ age ssh-to-age sops tailscale jq ];
 
   # setup nix and nix packages
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  nix.settings.trusted-users = [ "${hostname}" ];
   nixpkgs.config.allowUnfree = true;
   system.stateVersion = "25.11";
 
@@ -35,17 +37,11 @@
   # setup firewall
   networking.firewall = {
     enable = true;
-    allowedTCPPorts = [ ];
+    allowedTCPPorts = [ 22 ];
     allowedUDPPorts = [ ];
   };
 
   # setup nix-sops
-  environment.systemPackages = with pkgs; [ age ssh-to-age sops ];
-
-  boot.initrd.postDeviceCommands = ''
-    cp -r ${../../secrets/sops_key.txt} /run/sops_key.txt
-    chmod -R 700 /run/sops_key.txt
-  '';
 
   sops = {
     age.keyFile = "/run/sops_key.txt";
@@ -55,14 +51,16 @@
   };
 
   # setup users
+  sops.secrets."passwords/${hostname}".neededForUsers = true;
   users = {
     mutableUsers = false;
     users = {
       root.hashedPassword = "!";
       ${hostname} = {
 	isNormalUser = true;
+	hashedPasswordFile = config.sops.secrets."passwords/${hostname}".path;
 	home = "/home/${hostname}";
-	descriptiion = "${hostname}";
+	description = "${hostname}";
 	extraGroups = [ "wheel" "networkmanager" ];
 	openssh.authorizedKeys.keys = [ "${opensshPubKey}" ];
       };
@@ -76,7 +74,6 @@
   # setup tailscale as a client
   sops.secrets."tailscale_auth_key".owner = "tailscale-autoconnect";
 
-  environment.systemPackages = with pkgs; [ tailscale jq ];
   services.tailscale.enable = true;
 
   users.users.tailscale-autoconnect = {
@@ -91,7 +88,7 @@
     tailscale-autoconnect = {
       description = "Autoconnect to tailscale-network";
 
-      after = [ "network-pre.target" "tailscale.service" "tailscale-autoconnect-perms.service" ];
+      after = [ "network-pre.target" "tailscale.service" ];
       wants = [ "network-pre.target" "tailscale.service" ];
       wantedBy = [ "multi-user.target" ];
 
@@ -117,13 +114,12 @@
     };
   };
 
-  networking.firewall.allowedTCPPorts = [ 22 ];
 
   # setup bootloader
   boot.loader.grub = {
     enable = true;
     devices = lib.mkForce [ "${diskname}" ];
-    useOSProbe = true;
+    useOSProber = true;
   };
 
   # should be compatible with all NixOS machines I am deploying

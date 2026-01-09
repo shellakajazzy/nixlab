@@ -19,7 +19,7 @@
     system = "x86_64-linux";
     opensshPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGmwNpXbFUK5jSHWmMNMLQFE+cNJRpLEPrmE+gligiO4 homelab";
 
-    mkHostConfig = hostname: diskname: lib.nixosSystem {
+    mkHostConfig = hostname: diskname: nixpkgs.lib.nixosSystem {
       inherit system;
       specialArgs = { inherit inputs hostname diskname opensshPubKey; };
 
