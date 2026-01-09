@@ -1,30 +1,29 @@
 = `nixlab`
-My homelab/network configuration, primarily using NixOS flakes for deployment.
+This repo contains the design documents, configurations, and deployment setup for my homelab.
 
-== Network Anatomy
-* Using tailscale as a meshnet VPN to connect all of my machines together, as well as funneling some services to the public internet
+== Anatomy
+=== Physical Machines
+* Dell PowerEdge T420
+* Raspberry Pi 3
 
-* `summon`: Development and deployment server
-** Has read/write access to this GitHub repo
-** Uses nixos-anywhere to deploy my NixOS machines
+=== Hosts
+==== VLANs
+Unless otherwise specified, all machines are running as NixOS VMs running on Proxmox on the T420.
+Additionlly, all machines are clients on my Tailnet, but access between machines should be limited using Tailscale ACL rules.
+VLAN segmentation is achieved using a Proxmox VLAN SDN Zone.
 
-=== Services
-* `squeeze`: Runs basically all of my self hosted services
-** Runs as a VM on my Proxmox instance on my Dell Poweredge T420
-** Should start automatically when proxmox boots up
-** Hosts my file share, which is served either through nextcloud or sshfs
-** Runs most of my self-hosted services
-
-=== Automation
-* `spitball`: Dedicated n8n server
-** VM on my Proxmox instance of my T420
-** Running local AI agents through Ollama
-* `slumber`: Dedicated wake-on-Lan server
-** Running on a Raspberry Pi 3
-*** Host OS is Raspbian Lite instead of NixOS due to difficulty of setting up nixos-anywhere with a Pi 3
-** Automates waking my T420
-
-=== Clients
-* My phones and laptops
-* Should just be running tailscale, syncthing, and either sshfs or nextcloud to access my file share
-* Might allow laptop to deploy my machines using nixos-anywhere
+* Home Network
+** `proxmox` Proxmox on Poweredge T420
+** `raspbian` Raspbian on Raspberry Pi 3
+*** Dedicated wake-on-lan server for my T420, which is not always powered on
+* User VLAN - Internal services
+** `internal` Tailscale serve server
+*** Only powered on when the other machines in this VLAN are powered on
+** `filesharing` Nextcloud + Syncthing
+** `jellyfin` Jellyfin
+** `automation` n8n + AI agents
+*** GPU is passed through for use for AIs
+* DMZ VLAN - Public (internet) facing services
+** `shellakajazzy` Tailscale tunnel server
+** `forgejo` Forgejo
+** `web` Blog / personal website
