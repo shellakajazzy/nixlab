@@ -14,6 +14,9 @@
     # ~/~ begin <<README.md#flake-inputs>>[1]
     sops-nix.url = "github:Mic92/sops-nix";
     # ~/~ end
+    # ~/~ begin <<README.md#flake-inputs>>[2]
+    proxmox-nixos.url = "github:SaumonNet/proxmox-nixos";
+    # ~/~ end
   };
 
   outputs = { self, nixpkgs, ... } @ inputs: let
@@ -152,6 +155,9 @@
         ({ config, ... }: tailscaleSetup "${config.sops.secrets."tailscale_auth_key".path}")
         # ~/~ end
         # ~/~ begin <<README.md#nixos-host-modules>>[3]
+        inputs.proxmox-nixos.nixosModules.proxmox-ve
+        # ~/~ end
+        # ~/~ begin <<README.md#nixos-host-modules>>[4]
         tempDevTools
         # ~/~ end
     
@@ -253,7 +259,31 @@
           networking.interfaces = {
             eno1.wakeOnLan.enable = true;
             eno2.wakeOnLan.enable = true;
-          }; 
+          };
+          # ~/~ end
+          # ~/~ begin <<README.md#nixos-host-config>>[6]
+          services.proxmox-ve = {
+            enable = true;
+            ipAddress = "0.0.0.0";
+          };
+          
+          nixpkgs.overlays = [
+            inputs.proxmox-nixos.overlays.x86_64-linux
+          ];
+          # ~/~ end
+          # ~/~ begin <<README.md#nixos-host-config>>[7]
+          services.proxmox-ve.bridges = [ "vmbr0" ];
+          networking.bridges.vmbr0.interfaces = [ "eno2" ];
+          networking.useNetworkd = false;
+          networking.interfaces.vmbr0 = {
+            useDHCP = true;
+            macAddress = "f8:bc:12:50:0a:76";
+          };
+          networking.interfaces.eno2 = {
+            useDHCP = false;
+            ipv4.addresses = [ ];
+            ipv6.addresses = [ ];
+          };
           # ~/~ end
         }
       ];

@@ -4,7 +4,7 @@
 The configuration files / design documents for my homelab network and server.
 
 ## Hardware & Network Anatomy
-My home server is a Dell PowerEdge T420, which is running NixOS with `microvm.nix` on top of it.
+My home server is a Dell PowerEdge T420, which is running NixOS with `proxmox-nixos` on top of it.
 
 ## Nix Flake
 I use NixOS for both the host and the VMs running on it.
@@ -406,7 +406,57 @@ Thus, I need wake on lan enabled to turn my server powered on.
 networking.interfaces = {
   eno1.wakeOnLan.enable = true;
   eno2.wakeOnLan.enable = true;
-}; 
+};
+```
+
+## Proxmox Setup
+I am using [proxmox-nixos](https://github.com/SaumonNet/proxmox-nixos) for both declarative and imperative VMs.
+I want to use something like [Proxmox](https://www.proxmox.com/en/) so that I can play around with VMs quickly and easily through a web interface but the flake also allows me to create and manage VMs declaratively.
+
+First, I have to import the flake.
+
+`flake-inputs`:
+``` {.nix #flake-inputs}
+proxmox-nixos.url = "github:SaumonNet/proxmox-nixos";
+```
+
+Then, add it to the host's modules.
+
+`nixos-host-modules`:
+``` {.nix #nixos-host-modules}
+inputs.proxmox-nixos.nixosModules.proxmox-ve
+```
+
+Next, I need to enable and configure the Proxmox service and the overlay.
+
+`nixos-host-config`:
+``` {.nix #nixos-host-config}
+services.proxmox-ve = {
+  enable = true;
+  ipAddress = "0.0.0.0";
+};
+
+nixpkgs.overlays = [
+  inputs.proxmox-nixos.overlays.x86_64-linux
+];
+```
+
+Finally, I need to setup networking for Proxmox.
+
+`nixos-host-config`:
+``` {.nix #nixos-host-config}
+services.proxmox-ve.bridges = [ "vmbr0" ];
+networking.bridges.vmbr0.interfaces = [ "eno2" ];
+networking.useNetworkd = false;
+networking.interfaces.vmbr0 = {
+  useDHCP = true;
+  macAddress = "f8:bc:12:50:0a:76";
+};
+networking.interfaces.eno2 = {
+  useDHCP = false;
+  ipv4.addresses = [ ];
+  ipv6.addresses = [ ];
+};
 ```
 
 ## Temporary Developer Tools (Temporary)
