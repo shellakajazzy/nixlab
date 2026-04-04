@@ -116,12 +116,33 @@
     };
     # ~/~ end
     # ~/~ begin <<README.md#flake-declarations>>[6]
+    tailscaleServe = protocol: port: let
+      pkgs = import nixpkgs { system = "x86_64-linux"; };
+    in {
+      environment.systemPackages = [ pkgs.tailscale ];
+    
+      services.tailscale.enable = true;
+      systemd.services.tailscaleServe = {
+        description = "Serve a service using tailscale serve";
+        after = [ "network-pre.target" "tailscale.service" "tailscaleAutoconnect.service" ];
+        wants = [ "network-pre.target" "tailscale.service" "tailscaleAutoconnect.service" ];
+        wantedBy = [ "multi-user.target" ];
+    
+        script = ''
+          sleep 2
+    
+          ${pkgs.tailscale}/bin/tailscale serve --bg ${protocol}://localhost:${port}
+        '';
+      };
+    };
+    # ~/~ end
+    # ~/~ begin <<README.md#flake-declarations>>[7]
     networkingSetup = hostname: {
       networking.networkmanager.enable = true;
       networking.hostName = "${hostname}";
     };
     # ~/~ end
-    # ~/~ begin <<README.md#flake-declarations>>[7]
+    # ~/~ begin <<README.md#flake-declarations>>[8]
     raidDiskSetup = deviceName: {
       device = "${deviceName}";
       type = "disk";
@@ -137,7 +158,7 @@
       };
     };
     # ~/~ end
-    # ~/~ begin <<README.md#flake-declarations>>[8]
+    # ~/~ begin <<README.md#flake-declarations>>[9]
     tempDevTools = let pkgs = import nixpkgs { system = "x86_64-linux"; }; in { environment.systemPackages = with pkgs; [ tmux neovim git gh ]; };
     # ~/~ end
   in {
@@ -153,6 +174,7 @@
         # ~/~ end
         # ~/~ begin <<README.md#nixos-host-modules>>[2]
         ({ config, ... }: tailscaleSetup "${config.sops.secrets."tailscale_auth_key".path}")
+        ({ config, ... }: tailscaleServe "https+insecure" "8006")
         # ~/~ end
         # ~/~ begin <<README.md#nixos-host-modules>>[3]
         inputs.proxmox-nixos.nixosModules.proxmox-ve

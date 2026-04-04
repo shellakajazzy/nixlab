@@ -159,6 +159,32 @@ in {
 };
 ```
 
+#### Tailscale Serve
+I will often want to run `tailscale serve` so that I have a nice URL to access my services.
+
+`flake-declarations`:
+``` {.nix #flake-declarations}
+tailscaleServe = protocol: port: let
+  pkgs = import nixpkgs { system = "x86_64-linux"; };
+in {
+  environment.systemPackages = [ pkgs.tailscale ];
+
+  services.tailscale.enable = true;
+  systemd.services.tailscaleServe = {
+    description = "Serve a service using tailscale serve";
+    after = [ "network-pre.target" "tailscale.service" "tailscaleAutoconnect.service" ];
+    wants = [ "network-pre.target" "tailscale.service" "tailscaleAutoconnect.service" ];
+    wantedBy = [ "multi-user.target" ];
+
+    script = ''
+      sleep 2
+
+      ${pkgs.tailscale}/bin/tailscale serve --bg ${protocol}://localhost:${port}
+    '';
+  };
+};
+```
+
 ### Networking Setup
 This sets up the hostname of the machine as well as getting networking up.
 
@@ -395,6 +421,7 @@ Then, I simply import the Tailscale setup as a module.
 `nixos-host-modules`:
 ``` {.nix #nixos-host-modules}
 ({ config, ... }: tailscaleSetup "${config.sops.secrets."tailscale_auth_key".path}")
+({ config, ... }: tailscaleServe "https+insecure" "8006")
 ```
 
 ### Wake on Lan
