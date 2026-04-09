@@ -1,6 +1,6 @@
 [![Entangled badge](https://img.shields.io/badge/entangled-Use%20the%20source!-%2300aeff)](https://entangled.github.io/)
 
-# `labfiles`
+# `nixlab`
 The configuration files / design documents for my homelab network and server.
 
 ## Hardware & Network Anatomy
