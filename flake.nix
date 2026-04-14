@@ -17,6 +17,9 @@
     # ~/~ begin <<README.md#flake-inputs>>[2]
     proxmox-nixos.url = "github:SaumonNet/proxmox-nixos";
     # ~/~ end
+    # ~/~ begin <<README.md#flake-inputs>>[3]
+    copyparty.url = "github:9001/copyparty";
+    # ~/~ end
   };
 
   outputs = { self, nixpkgs, ... } @ inputs: let
@@ -116,7 +119,7 @@
     };
     # ~/~ end
     # ~/~ begin <<README.md#flake-declarations>>[6]
-    tailscaleServe = protocol: port: let
+    tailscaleServe = pathName: protocol: port: let
       pkgs = import nixpkgs { system = "x86_64-linux"; };
     in {
       environment.systemPackages = [ pkgs.tailscale ];
@@ -131,7 +134,7 @@
         script = ''
           sleep 2
     
-          ${pkgs.tailscale}/bin/tailscale serve --bg ${protocol}://localhost:${port}
+          ${pkgs.tailscale}/bin/tailscale serve --bg ${pathName} ${protocol}://localhost:${port}
         '';
       };
     };
@@ -159,6 +162,68 @@
     };
     # ~/~ end
     # ~/~ begin <<README.md#flake-declarations>>[9]
+    virtiofsdSetup = let
+      pkgs = import nixpkgs { system = "x86_64-linux"; };
+    in {
+      environment.systemPackages = [ pkgs.virtiofsd ];
+      system.activationScripts.virtiofsd = ''
+        mkdir -p /usr/libexec
+        ln -sf ${pkgs.virtiofsd}/bin/virtiofsd /usr/libexec/virtiofsd
+      '';
+    };
+    # ~/~ end
+    # ~/~ begin <<README.md#flake-declarations>>[10]
+    vmTemplate = diskName: hostname: extraModules: nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        nixpkgSetup
+        localizationSetup
+        sshSetup
+        (userSetup "${hostname}")
+        (networkingSetup "${hostname}")
+    
+        ({ config, ... }: tailscaleSetup "/var/lib/secrets/tailscale_auth_key")
+    
+        inputs.disko.nixosModules.disko
+    
+        ./hardware-configurations/${hostname}.nix
+    
+        {
+          disko.devices = {
+            disk = {
+              main = {
+                device = diskName;
+                type = "disk";
+                content = {
+                  type = "gpt";
+                  partitions = {
+                    boot = {
+                      size = "1M";
+                      type = "EF02";
+                      attributes = [ 0 ];
+                    };
+                    root = {
+                      size = "100%";
+                      content = {
+                        type = "filesystem";
+                        format = "ext4";
+                        mountpoint = "/";
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+          boot.loader.grub = {
+            enable = true;
+            devices = [ "nodev" ];
+          };
+        }
+      ] ++ extraModules;
+    };
+    # ~/~ end
+    # ~/~ begin <<README.md#flake-declarations>>[11]
     tempDevTools = let pkgs = import nixpkgs { system = "x86_64-linux"; }; in { environment.systemPackages = with pkgs; [ tmux neovim git gh ]; };
     # ~/~ end
   in {
@@ -174,12 +239,15 @@
         # ~/~ end
         # ~/~ begin <<README.md#nixos-host-modules>>[2]
         ({ config, ... }: tailscaleSetup "${config.sops.secrets."tailscale_auth_key".path}")
-        ({ config, ... }: tailscaleServe "https+insecure" "8006")
+        ({ config, ... }: tailscaleServe "/" "https+insecure" "8006")
         # ~/~ end
         # ~/~ begin <<README.md#nixos-host-modules>>[3]
         inputs.proxmox-nixos.nixosModules.proxmox-ve
         # ~/~ end
         # ~/~ begin <<README.md#nixos-host-modules>>[4]
+        ({ config, ... }: virtiofsdSetup)
+        # ~/~ end
+        # ~/~ begin <<README.md#nixos-host-modules>>[5]
         tempDevTools
         # ~/~ end
     
@@ -291,6 +359,7 @@
           
           nixpkgs.overlays = [
             inputs.proxmox-nixos.overlays.x86_64-linux
+            inputs.copyparty.overlays.default
           ];
           # ~/~ end
           # ~/~ begin <<README.md#nixos-host-config>>[7]
@@ -307,9 +376,71 @@
             ipv6.addresses = [ ];
           };
           # ~/~ end
+          # ~/~ begin <<README.md#nixos-host-config>>[8]
+          sops.secrets."copyparty_admin_passwd" = { };
+          # ~/~ end
         }
       ];
     };
+    # ~/~ end
+    # ~/~ begin <<README.md#vm-declarations>>[init]
+    nixosConfigurations.fileshare = vmTemplate "/dev/sda" "fileshare" [
+      ({ config, ... }: tailscaleServe "/" "http" "3923")
+      ({ config, ... }: tailscaleServe "/sync" "http" "8384")
+      inputs.copyparty.nixosModules.default
+      ({ pkgs, ... }: {
+        # ~/~ begin <<README.md#fileshare-vm-config>>[init]
+        fileSystems."/mnt/fileshare" = {
+          device = "fileshare";
+          fsType = "virtiofs";
+          options = [
+            "nofail"
+            "x-systemd.automount"
+          ];
+        };
+        
+        systemd.tmpfiles.rules = [
+          "d /mnt/fileshare 0755 copyparty copyparty -"
+          "f /var/lib/secrets/copyparty_admin_passwd 0600 copyparty copyparty -"
+        ];
+        # ~/~ end
+        # ~/~ begin <<README.md#fileshare-vm-config>>[1]
+        environment.systemPackages = [ pkgs.copyparty ];
+        services.copyparty = {
+          enable = true;
+          settings.i = "0.0.0.0";
+        
+          accounts.admin.passwordFile = "/var/lib/secrets/copyparty_admin_passwd";
+          groups.admin = [ "admin" ];
+        
+          volumes."/" = {
+            path = "/mnt/fileshare";
+            access.rw = [ "admin" ];
+            flags = {
+              scan = 60;
+              e2d = true;
+              d2t = true;
+            };
+          };
+        
+          openFilesLimit = 8192;
+        };
+        # ~/~ end
+        # ~/~ begin <<README.md#fileshare-vm-config>>[2]
+        services.syncthing = {
+          enable = true;
+          user = "copyparty";
+          group = "copyparty";
+        
+          openDefaultPorts = true;
+          guiAddress = "0.0.0.0:8384";
+          dataDir = "/mnt/fileshare/syncthing";
+        };
+        networking.firewall.allowedTCPPorts = [ 8384 22000 ];
+        networking.firewall.allowedUDPPorts = [ 22000 21027 ];
+        # ~/~ end
+      })
+    ];
     # ~/~ end
   };
 }

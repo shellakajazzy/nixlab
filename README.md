@@ -25,6 +25,7 @@ I will store all of the configurations in a single flake file.
     <<flake-declarations>>
   in {
     <<nixos-host-declaration>>
+    <<vm-declarations>>
   };
 }
 ```
@@ -164,7 +165,7 @@ I will often want to run `tailscale serve` so that I have a nice URL to access m
 
 `flake-declarations`:
 ``` {.nix #flake-declarations}
-tailscaleServe = protocol: port: let
+tailscaleServe = pathName: protocol: port: let
   pkgs = import nixpkgs { system = "x86_64-linux"; };
 in {
   environment.systemPackages = [ pkgs.tailscale ];
@@ -179,7 +180,7 @@ in {
     script = ''
       sleep 2
 
-      ${pkgs.tailscale}/bin/tailscale serve --bg ${protocol}://localhost:${port}
+      ${pkgs.tailscale}/bin/tailscale serve --bg ${pathName} ${protocol}://localhost:${port}
     '';
   };
 };
@@ -219,7 +220,7 @@ nixosConfigurations.nixoshost = nixpkgs.lib.nixosSystem {
 };
 ```
 
-### Deployement
+### deployment
 The NixOS Host Machine is deployed using `nixos-anywhere`.
 However, I also need to transfer over an age key for my secrets, so here is a script to do all of that.
 
@@ -421,7 +422,7 @@ Then, I simply import the Tailscale setup as a module.
 `nixos-host-modules`:
 ``` {.nix #nixos-host-modules}
 ({ config, ... }: tailscaleSetup "${config.sops.secrets."tailscale_auth_key".path}")
-({ config, ... }: tailscaleServe "https+insecure" "8006")
+({ config, ... }: tailscaleServe "/" "https+insecure" "8006")
 ```
 
 ### Wake on Lan
@@ -465,7 +466,28 @@ services.proxmox-ve = {
 
 nixpkgs.overlays = [
   inputs.proxmox-nixos.overlays.x86_64-linux
+  inputs.copyparty.overlays.default
 ];
+```
+
+I also want to setup `virtiofsd` so that I can passthrough directories to VMs.
+
+`flake-declarations`:
+``` {.nix #flake-declarations}
+virtiofsdSetup = let
+  pkgs = import nixpkgs { system = "x86_64-linux"; };
+in {
+  environment.systemPackages = [ pkgs.virtiofsd ];
+  system.activationScripts.virtiofsd = ''
+    mkdir -p /usr/libexec
+    ln -sf ${pkgs.virtiofsd}/bin/virtiofsd /usr/libexec/virtiofsd
+  '';
+};
+```
+
+`nixos-host-modules`:
+```  {.nix #nixos-host-modules}
+({ config, ... }: virtiofsdSetup)
 ```
 
 Finally, I need to setup networking for Proxmox.
@@ -484,6 +506,184 @@ networking.interfaces.eno2 = {
   ipv4.addresses = [ ];
   ipv6.addresses = [ ];
 };
+```
+
+## VM Template
+This is the template for the declarative VMs deployed on top of the Proxmox host.
+
+`flake-declarations`:
+``` {.nix #flake-declarations}
+vmTemplate = diskName: hostname: extraModules: nixpkgs.lib.nixosSystem {
+  system = "x86_64-linux";
+  modules = [
+    nixpkgSetup
+    localizationSetup
+    sshSetup
+    (userSetup "${hostname}")
+    (networkingSetup "${hostname}")
+
+    ({ config, ... }: tailscaleSetup "/var/lib/secrets/tailscale_auth_key")
+
+    inputs.disko.nixosModules.disko
+
+    ./hardware-configurations/${hostname}.nix
+
+    {
+      disko.devices = {
+        disk = {
+          main = {
+            device = diskName;
+            type = "disk";
+            content = {
+              type = "gpt";
+              partitions = {
+                boot = {
+                  size = "1M";
+                  type = "EF02";
+                  attributes = [ 0 ];
+                };
+                root = {
+                  size = "100%";
+                  content = {
+                    type = "filesystem";
+                    format = "ext4";
+                    mountpoint = "/";
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+      boot.loader.grub = {
+        enable = true;
+        devices = [ "nodev" ];
+      };
+    }
+  ] ++ extraModules;
+};
+```
+
+### Deployment
+Here is a script to deploy the VMs, which is meant to be run on the Proxmox host in the directory of the Git repo.
+
+[`deploy-vm.sh`](deploy-vm.sh):
+``` {.sh file="deploy-vm.sh"}
+extra_files=$(mktemp -d)
+mkdir -pv ${extra_files}/var/lib/secrets
+sudo cp --verbose --archive /run/secrets/tailscale_auth_key ${extra_files}/var/lib/secrets/tailscale_auth_key
+sudo chown $USER ${extra_files}/var/lib/secrets/tailscale_auth_key
+chmod 600 ${extra_files}/run/secrets/tailscale_auth_key
+
+<<vm-deployment-extra-files>>
+
+nix run github:nix-community/nixos-anywhere --                                        \
+  --flake .#$1                                                                        \
+  --generate-hardware-config nixos-generate-config ./hardware-configurations/$1.nix   \
+  --extra-files ${extra_files}                                                        \
+  --target-host $2
+```
+
+## Fileshare
+I am using [`copyparty`](https://github.com/9001/copyparty) for managing my storage and [Syncthing](https://syncthing.net/) in order to have shared folders accross devices.
+
+I need to first import `copyparty` as an input to the flake.
+
+`flake-inputs`:
+``` {.nix #flake-inputs}
+copyparty.url = "github:9001/copyparty";
+```
+
+`vm-declarations`:
+``` {.nix #vm-declarations}
+nixosConfigurations.fileshare = vmTemplate "/dev/sda" "fileshare" [
+  ({ config, ... }: tailscaleServe "/" "http" "3923")
+  ({ config, ... }: tailscaleServe "/sync" "http" "8384")
+  inputs.copyparty.nixosModules.default
+  ({ pkgs, ... }: {
+    <<fileshare-vm-config>>
+  })
+];
+```
+
+First, I need to setup the passthrough to the fileshare directory on the Proxmox host using VirtioFS.
+
+`fileshare-vm-config`:
+``` {.nix #fileshare-vm-config}
+fileSystems."/mnt/fileshare" = {
+  device = "fileshare";
+  fsType = "virtiofs";
+  options = [
+    "nofail"
+    "x-systemd.automount"
+  ];
+};
+
+systemd.tmpfiles.rules = [
+  "d /mnt/fileshare 0755 copyparty copyparty -"
+  "f /var/lib/secrets/copyparty_admin_passwd 0600 copyparty copyparty -"
+];
+```
+
+Next, I need to setup the `copyparty` service.
+
+`fileshare-vm-config`:
+``` {.nix #fileshare-vm-config}
+environment.systemPackages = [ pkgs.copyparty ];
+services.copyparty = {
+  enable = true;
+  settings.i = "0.0.0.0";
+
+  accounts.admin.passwordFile = "/var/lib/secrets/copyparty_admin_passwd";
+  groups.admin = [ "admin" ];
+
+  volumes."/" = {
+    path = "/mnt/fileshare";
+    access.rw = [ "admin" ];
+    flags = {
+      scan = 60;
+      e2d = true;
+      d2t = true;
+    };
+  };
+
+  openFilesLimit = 8192;
+};
+```
+
+In order to setup `copyparty`, I need to define the `admin` user and use `nix-sops` to declare their password declaratively.
+
+`nixos-host-config`:
+``` {.nix #nixos-host-config}
+sops.secrets."copyparty_admin_passwd" = { };
+```
+
+Because of this, I need to make sure the password file is copied over to the newly declared VM during its deployment.
+
+`vm-deployment-extra-files`:
+``` {.sh #vm-deployment-extra-files}
+if [ "$1" = "fileshare" ]; then
+  sudo cp --verbose --archive /run/secrets/copyparty_admin_passwd ${extra_files}/var/lib/secrets/copyparty_admin_passwd
+  sudo chown $USER ${extra_files}/var/lib/secrets/copyparty_admin_passwd
+  chmod 600 ${extra_files}/run/secrets/copyparty_admin_passwd
+fi
+```
+
+Finally, I need to setup the Syncthing service.
+
+`fileshare-vm-config`:
+``` {.nix #fileshare-vm-config}
+services.syncthing = {
+  enable = true;
+  user = "copyparty";
+  group = "copyparty";
+
+  openDefaultPorts = true;
+  guiAddress = "0.0.0.0:8384";
+  dataDir = "/mnt/fileshare/syncthing";
+};
+networking.firewall.allowedTCPPorts = [ 8384 22000 ];
+networking.firewall.allowedUDPPorts = [ 22000 21027 ];
 ```
 
 ## Temporary Developer Tools (Temporary)
