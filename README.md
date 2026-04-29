@@ -598,7 +598,6 @@ copyparty.url = "github:9001/copyparty";
 ``` {.nix #vm-declarations}
 nixosConfigurations.fileshare = vmTemplate "/dev/sda" "fileshare" [
   ({ config, ... }: tailscaleServe "/" "http" "3923")
-  ({ config, ... }: tailscaleServe "/sync" "http" "8384")
   inputs.copyparty.nixosModules.default
   ({ pkgs, ... }: {
     <<fileshare-vm-config>>
@@ -622,6 +621,8 @@ fileSystems."/mnt/fileshare" = {
 systemd.tmpfiles.rules = [
   "d /mnt/fileshare 0755 copyparty copyparty -"
   "f /var/lib/secrets/copyparty_admin_passwd 0600 copyparty copyparty -"
+  "d /mnt/fileshare/syncthing 0755 syncthing syncthing -"
+  "d /mnt/fileshare/synced 0755 syncthing syncthing -"
 ];
 ```
 
@@ -675,8 +676,8 @@ Finally, I need to setup the Syncthing service.
 ``` {.nix #fileshare-vm-config}
 services.syncthing = {
   enable = true;
-  user = "copyparty";
-  group = "copyparty";
+  user = "syncthing";
+  group = "syncthing";
 
   openDefaultPorts = true;
   guiAddress = "0.0.0.0:8384";

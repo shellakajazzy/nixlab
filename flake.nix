@@ -386,7 +386,6 @@
     # ~/~ begin <<README.md#vm-declarations>>[init]
     nixosConfigurations.fileshare = vmTemplate "/dev/sda" "fileshare" [
       ({ config, ... }: tailscaleServe "/" "http" "3923")
-      ({ config, ... }: tailscaleServe "/sync" "http" "8384")
       inputs.copyparty.nixosModules.default
       ({ pkgs, ... }: {
         # ~/~ begin <<README.md#fileshare-vm-config>>[init]
@@ -402,6 +401,8 @@
         systemd.tmpfiles.rules = [
           "d /mnt/fileshare 0755 copyparty copyparty -"
           "f /var/lib/secrets/copyparty_admin_passwd 0600 copyparty copyparty -"
+          "d /mnt/fileshare/syncthing 0755 syncthing syncthing -"
+          "d /mnt/fileshare/synced 0755 syncthing syncthing -"
         ];
         # ~/~ end
         # ~/~ begin <<README.md#fileshare-vm-config>>[1]
@@ -429,8 +430,8 @@
         # ~/~ begin <<README.md#fileshare-vm-config>>[2]
         services.syncthing = {
           enable = true;
-          user = "copyparty";
-          group = "copyparty";
+          user = "syncthing";
+          group = "syncthing";
         
           openDefaultPorts = true;
           guiAddress = "0.0.0.0:8384";
