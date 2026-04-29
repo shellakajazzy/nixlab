@@ -165,7 +165,7 @@ I will often want to run `tailscale serve` so that I have a nice URL to access m
 
 `flake-declarations`:
 ``` {.nix #flake-declarations}
-tailscaleServe = pathName: protocol: port: let
+tailscaleServe = protocol: port: let
   pkgs = import nixpkgs { system = "x86_64-linux"; };
 in {
   environment.systemPackages = [ pkgs.tailscale ];
@@ -180,7 +180,7 @@ in {
     script = ''
       sleep 2
 
-      ${pkgs.tailscale}/bin/tailscale serve --bg ${pathName} ${protocol}://localhost:${port}
+      ${pkgs.tailscale}/bin/tailscale serve --bg ${protocol}://localhost:${port}
     '';
   };
 };
@@ -422,7 +422,7 @@ Then, I simply import the Tailscale setup as a module.
 `nixos-host-modules`:
 ``` {.nix #nixos-host-modules}
 ({ config, ... }: tailscaleSetup "${config.sops.secrets."tailscale_auth_key".path}")
-({ config, ... }: tailscaleServe "/" "https+insecure" "8006")
+({ config, ... }: tailscaleServe "https+insecure" "8006")
 ```
 
 ### Wake on Lan
@@ -597,7 +597,7 @@ copyparty.url = "github:9001/copyparty";
 `vm-declarations`:
 ``` {.nix #vm-declarations}
 nixosConfigurations.fileshare = vmTemplate "/dev/sda" "fileshare" [
-  ({ config, ... }: tailscaleServe "/" "http" "3923")
+  ({ config, ... }: tailscaleServe "http" "3923")
   inputs.copyparty.nixosModules.default
   ({ pkgs, ... }: {
     <<fileshare-vm-config>>
@@ -685,6 +685,37 @@ services.syncthing = {
 };
 networking.firewall.allowedTCPPorts = [ 8384 22000 ];
 networking.firewall.allowedUDPPorts = [ 22000 21027 ];
+```
+
+## Git Forge
+I am using [Forgejo](https://forgejo.org/) as my Git forge, which I will mainly use to mirror my GitHub repos or host private repos.
+
+``:
+``` {.nix #vm-declarations}
+nixosConfigurations.git = vmTemplate "/dev/sda" "git" [
+  ({ config, ... }: tailscaleServe "http" "3000")
+  ({ pkgs, ... }: {
+    services.forgejo = {
+      enable = true;
+      lfs.enable = true;
+      user = "forgejo";
+      group = "forgejo";
+      settings.server.ROOT_URL = "https://git.sable-scylla.ts.net";
+      useWizard = true;
+      
+      stateDir = "/mnt/fileshare/git/forgejo";
+      repositoryRoot = "/mnt/fileshare/git/repos";
+    };
+    
+    fileSystems."/mnt/fileshare" = {
+      device = "fileshare";
+      fsType = "virtiofs";
+      options = [ "nofail" "x-systemd.automount" ];
+    };
+    
+    systemd.tmpfiles.rules = [ "d /mnt/fileshare/git 0755 forgejo forgejo -" ];
+  })
+];
 ```
 
 ## Temporary Developer Tools (Temporary)

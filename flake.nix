@@ -119,7 +119,7 @@
     };
     # ~/~ end
     # ~/~ begin <<README.md#flake-declarations>>[6]
-    tailscaleServe = pathName: protocol: port: let
+    tailscaleServe = protocol: port: let
       pkgs = import nixpkgs { system = "x86_64-linux"; };
     in {
       environment.systemPackages = [ pkgs.tailscale ];
@@ -134,7 +134,7 @@
         script = ''
           sleep 2
     
-          ${pkgs.tailscale}/bin/tailscale serve --bg ${pathName} ${protocol}://localhost:${port}
+          ${pkgs.tailscale}/bin/tailscale serve --bg ${protocol}://localhost:${port}
         '';
       };
     };
@@ -239,7 +239,7 @@
         # ~/~ end
         # ~/~ begin <<README.md#nixos-host-modules>>[2]
         ({ config, ... }: tailscaleSetup "${config.sops.secrets."tailscale_auth_key".path}")
-        ({ config, ... }: tailscaleServe "/" "https+insecure" "8006")
+        ({ config, ... }: tailscaleServe "https+insecure" "8006")
         # ~/~ end
         # ~/~ begin <<README.md#nixos-host-modules>>[3]
         inputs.proxmox-nixos.nixosModules.proxmox-ve
@@ -385,7 +385,7 @@
     # ~/~ end
     # ~/~ begin <<README.md#vm-declarations>>[init]
     nixosConfigurations.fileshare = vmTemplate "/dev/sda" "fileshare" [
-      ({ config, ... }: tailscaleServe "/" "http" "3923")
+      ({ config, ... }: tailscaleServe "http" "3923")
       inputs.copyparty.nixosModules.default
       ({ pkgs, ... }: {
         # ~/~ begin <<README.md#fileshare-vm-config>>[init]
@@ -440,6 +440,32 @@
         networking.firewall.allowedTCPPorts = [ 8384 22000 ];
         networking.firewall.allowedUDPPorts = [ 22000 21027 ];
         # ~/~ end
+      })
+    ];
+    # ~/~ end
+    # ~/~ begin <<README.md#vm-declarations>>[1]
+    nixosConfigurations.git = vmTemplate "/dev/sda" "git" [
+      ({ config, ... }: tailscaleServe "http" "3000")
+      ({ pkgs, ... }: {
+        services.forgejo = {
+          enable = true;
+          lfs.enable = true;
+          user = "forgejo";
+          group = "forgejo";
+          settings.server.ROOT_URL = "https://git.sable-scylla.ts.net";
+          useWizard = true;
+          
+          stateDir = "/mnt/fileshare/git/forgejo";
+          repositoryRoot = "/mnt/fileshare/git/repos";
+        };
+        
+        fileSystems."/mnt/fileshare" = {
+          device = "fileshare";
+          fsType = "virtiofs";
+          options = [ "nofail" "x-systemd.automount" ];
+        };
+        
+        systemd.tmpfiles.rules = [ "d /mnt/fileshare/git 0755 forgejo forgejo -" ];
       })
     ];
     # ~/~ end
